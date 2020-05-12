@@ -32,7 +32,7 @@ clab=cbind(proliferation_colors_matrix, pam50_colors_matrix, subtype_colors_matr
 colnames(clab)=c("Proliferation", "PAM50", "ILC Class")
 
 pdf("img/heatmap5A.pdf",width=5,height=10)
-heatmap.3(ilc_expression_matrix, scale="row", ColSideColors=clab, key = FALSE,
+heatmap.3(ilc_expression_matrix, scale="row", ColSideColors=clab,
           col=cell_colors, trace="none", density.info="none", labRow=FALSE, labCol=FALSE,
           margin=c(6,3), lhei=c(1,2), lwid=c(1,4), dendrogram="row", Colv=FALSE,
           xlab="sample", ylab="SAM FDR=0 n=1276",
@@ -40,5 +40,6 @@ heatmap.3(ilc_expression_matrix, scale="row", ColSideColors=clab, key = FALSE,
 
 legend("topright",legend=c("Immune-related","Proliferative","Reactive-like","", "Basal","Her2","LumA","LumB","Normal"),
        fill=c("red","green","black", "white", "brown","blue","cyan","pink","yellow"), border=FALSE, bty="n", y.intersp = 0.7, cex=1)
+
 dev.off()
 
