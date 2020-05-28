@@ -23,13 +23,11 @@ gene_lenght <- fread("data/entrez_gene_length_all_20440ids.txt")
 gene_lenght <- gene_lenght[match(rnaseq_genes, gene_lenght$entrez),] # order by rnaseq_genes
 
 #get metadata about samples 
-proliferation_first_quartile <- fread("data/proliferation_first_quartile_df.csv")
-proliferation_third_quartile <- fread("data/proliferation_third_quartile_df.csv")
+proliferation_df <- fread("data/proliferation_df.csv")
 
-low_proliferation_samples <-  proliferation_first_quartile$Case.ID
-high_proliferation_samples <-  proliferation_third_quartile$Case.ID
+proliferation_samples <-  proliferation_df$Case.ID
 
-rnaseq <-rnaseq[,(names(rnaseq) %in% low_proliferation_samples )|(names(rnaseq) %in% high_proliferation_samples )| (names(rnaseq)=="Entrez_Gene_Id"),with=FALSE] 
+rnaseq <-rnaseq[,(names(rnaseq) %in% proliferation_samples ) | (names(rnaseq)=="Entrez_Gene_Id"),with=FALSE] 
 
 rnaseq_mat <- as.matrix(rnaseq[,grepl( "TCGA" , names( rnaseq ) ),with=FALSE]) 
 
@@ -39,8 +37,7 @@ colnames(rnaseq_mat)
 
 sample_types <- data.table(colnames(rnaseq_mat))
 
-sample_types[sample_types$V1 %in% low_proliferation_samples ,"type"] <- "low_proliferation"
-sample_types[sample_types$V1 %in% high_proliferation_samples ,"type"] <- "high_proliferation"
+sample_types[sample_types$V1 %in% proliferation_samples ,"type"] <- "proliferation"
 
 #If the counts from all samples were stored in a single file, [LIKE IN Ciriello 2015 cancer paper]
 #the data can be read into R and then converted into a DGEList-object using the DGEList function!!!
@@ -145,6 +142,7 @@ for (i in 2:nsamples){
   den <- density(rpkm[,i])
   lines(den$x, den$y, col=col[i], lwd=2)
 }
+dim(rpkm)
 #legend("topright", samplenames, text.col=col, bty="n")
 
 #
@@ -180,110 +178,14 @@ title(main="A. Sample unnormalized data", ylab="Log-rpkm")
 
 x2 <- calcNormFactors(x2)
 x2$samples$norm.factors
+dim(rpkm)
 
 rpkm <- rpkm(x2, log=TRUE)
 boxplot(rpkm[,1:10], las=2, main="") #boxplot(rpkm, las=2, col=col, main="")
 title(main="B. Sample normalized data", ylab="Log-rpkm")
 ###############
-
-##############
-#Unsupervised clustering of samples
-##############
-
-# Fig 3
-
-rpkm <- rpkm(x, log=TRUE)#rpkm(x, log=TRUE)
-par(mfrow=c(1,1))
-col.group <- group
-levels(col.group) <-  brewer.pal(nlevels(col.group), "Set1")
-col.group <- as.character(col.group)
-plotMDS(rpkm, labels=group, col=col.group)
-title(main="Sample groups")
-
-
-#library(Glimma)
-#glMDSPlot(rpkm, labels=group, groups=x$samples[,c(2,5)], launch=FALSE) # it generates folder glimma-plots with MDS-Plot.html which can be open with any browser, just double click on it
-
-
-
-#####################
-#Differential expression analysis
-#Creating a design matrix and contrasts
-#####################
-
-#In TUTORIAL f1000 study, it is of interest to see which genes are expressed at different levels between the three cell populations profiled. 
-#In our analysis, linear models are fitted to the data with the assumption that the underlying data is normally distributed. 
-#To get started, a design matrix is set up with both the cell population and sequencing lane (batch) information.
-
-design <- model.matrix(~0+group)
-colnames(design) <- gsub("group", "", colnames(design))
-design
-
-contr.matrix <- makeContrasts(
-  HighVsLowProliferation = high_proliferation-low_proliferation,   
-  levels = colnames(design))
-contr.matrix
-
-##################
-#Removing heteroscedascity from count data
-##################
-v <- voom(x, design, plot=TRUE)  # generates fig 4a voom mean-variance trend
-v
-
-##################
-#Fitting linear models for comparisons of interest
-##################
-
-vfit <- lmFit(v, design)
-vfit <- contrasts.fit(vfit, contrasts=contr.matrix)
-efit <- eBayes(vfit)
-plotSA(efit) # generates fig 4b final  mean-variance trend
-
-################
-#Examining the number of DE genes
-################
-
-summary(decideTests(efit))
-
-
-tfit <- treat(vfit, lfc=1)
-dt <- decideTests(tfit)
-summary(dt)
-
-de.common <- which(dt[,1]!=0)
-
-# for entrez - gene name correspondence
-dftmp <- fread("data/data_RNA_Seq_v2_expression_median.txt")
-dftmp[dftmp$Hugo_Symbol=="CDH1"]$Entrez_Gene_Id 
-
-###############
-#Examining individual DE genes from top to bottom
-###############
-
-high.vs.low.proliferation <- topTreat(tfit, coef=1, n=Inf)
-
-###############
-#Useful graphical representations of differential expression results
-###############
-
-plotMD(tfit, column=1, status=dt[,1], main=colnames(tfit)[1], xlim=c(-8,13)) #fig6
-
-
-#glMDPlot(tfit, coef=1, status=dt, main=colnames(tfit)[1],
-#         side.main="ENTREZID", counts=rpkm, groups=group, launch=FALSE)
-
-
-#############
-# Heatmap
-#############
-library(gplots)
-high.vs.low.proliferation.topgenes <- high.vs.low.proliferation$entrez[1:100]
-i <- which(v$genes$entrez %in% high.vs.low.proliferation.topgenes)
-mycol <- colorpanel(1000,"blue","white","red")
-
-heatmap.2(rpkm[i,], scale="row",
-          labRow=v$genes$entrez[i], labCol=group,
-          col=mycol, trace="none", density.info="none", 
-          margin=c(8,6), lhei=c(2,10), dendrogram="column")
-high.vs.low.proliferation.topgenes <- high.vs.low.proliferation$entrez[1:104]
-save(high.vs.low.proliferation.topgenes, file="data/proliferation_top_genes.Rda")
+save(rpkm, file="data/norm.Rda")
+columns <- colnames(rpkm)
+save(columns, file="data/colnames.Rda")
+rows <- rownames(rpkm)
+save(rows, file="data/rownames.Rda")
